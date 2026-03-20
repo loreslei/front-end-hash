@@ -102,22 +102,22 @@ export function PagedHashTable({ pages, highlightIndex, onHighlightIndex, highli
     <div className="space-y-4">
       {/* Global stats */}
       <div className="grid grid-cols-4 gap-3">
-        <div className="bg-card rounded-lg border p-3 text-center">
+        <div className="rounded-lg border p-3 text-center bg-emerald-50/50 border-emerald-100">
           <p className="text-2xl font-bold font-mono text-primary">{globalStats.totalWords}</p>
           <p className="text-[10px] text-muted-foreground font-display uppercase tracking-wider">Inserções</p>
         </div>
-        <div className="bg-card rounded-lg border p-3 text-center">
-          <p className="text-2xl font-bold font-mono text-accent-foreground">{globalStats.totalCollisions}</p>
+        <div className="rounded-lg border p-3 text-center bg-pink-50/50 border-pink-100">
+          <p className="text-2xl font-bold font-mono" style={{ color: HASH_COLORS[4] }}>{globalStats.totalCollisions}</p>
           <p className="text-[10px] text-muted-foreground font-display uppercase tracking-wider">Colisões</p>
         </div>
-        <div className="bg-card rounded-lg border p-3 text-center">
-          <p className="text-2xl font-bold font-mono text-accent-foreground">
+        <div className="rounded-lg border p-3 text-center bg-violet-50/50 border-violet-100">
+          <p className="text-2xl font-bold font-mono" style={{ color: HASH_COLORS[2] }}>
             {globalStats.totalWords > 0 ? ((globalStats.totalCollisions / globalStats.totalWords) * 100).toFixed(1) : 0}%
           </p>
           <p className="text-[10px] text-muted-foreground font-display uppercase tracking-wider">Colisões %</p>
         </div>
-        <div className="bg-card rounded-lg border p-3 text-center">
-          <p className="text-2xl font-bold font-mono" style={{ color: HASH_COLORS[4] }}>{globalStats.overflows}</p>
+        <div className="rounded-lg border p-3 text-center bg-sky-50/50 border-sky-100">
+          <p className="text-2xl font-bold font-mono" style={{ color: HASH_COLORS[1] }}>{globalStats.overflows}</p>
           <p className="text-[10px] text-muted-foreground font-display uppercase tracking-wider">Overflows</p>
         </div>
       </div>

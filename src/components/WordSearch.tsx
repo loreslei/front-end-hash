@@ -1,9 +1,20 @@
 import { useState, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, CheckCircle2, XCircle, Zap, Timer, TrendingDown, Gauge } from "lucide-react";
-import { searchWord, type SearchResult } from "@/lib/search";
+import { Search, CheckCircle2, XCircle } from "lucide-react";
+import { searchWordApi, type SearchResult } from "@/lib/search";
 import type { HashFunction } from "@/lib/hash";
+
+const HASH_COLORS = [
+  "hsl(var(--hash-0))",
+  "hsl(var(--hash-1))",
+  "hsl(var(--hash-2))",
+  "hsl(var(--hash-3))",
+  "hsl(var(--hash-4))",
+  "hsl(var(--hash-5))",
+  "hsl(var(--hash-6))",
+  "hsl(var(--hash-7))",
+];
 
 interface WordSearchProps {
   words: string[];
@@ -11,25 +22,35 @@ interface WordSearchProps {
   totalBuckets: number;
   bucketsPerPage: number;
   onSearchResult?: (result: SearchResult) => void;
+  // Adicionamos esta propriedade opcional caso você queira passar a função pelo Index.tsx
+  customSearchApi?: (word: string) => Promise<SearchResult>; 
 }
 
-export function WordSearch({ words, hashFn, totalBuckets, bucketsPerPage, onSearchResult }: WordSearchProps) {
+export function WordSearch({ onSearchResult, customSearchApi }: WordSearchProps) {
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<SearchResult | null>(null);
   const [isSearching, setIsSearching] = useState(false);
 
-  const handleSearch = useCallback(() => {
-    if (!query.trim() || words.length === 0) return;
+  // Alteramos handleSearch para ser assíncrono (async) e bater na API
+  const handleSearch = useCallback(async () => {
+    if (!query.trim()) return;
     setIsSearching(true);
+    setResult(null); // Limpa o resultado anterior enquanto busca
     
-    // Small delay to show loading state
-    setTimeout(() => {
-      const res = searchWord(query, words, hashFn, totalBuckets, bucketsPerPage);
+    try {
+      // Usa a API customizada passada pelo pai, ou importa direto de lib/search
+      const searchFn = customSearchApi || searchWordApi;
+      const res = await searchFn(query);
+      
       setResult(res);
       onSearchResult?.(res);
+    } catch (error) {
+      console.error("Erro ao buscar palavra na API:", error);
+      // Aqui você poderia adicionar um Toast avisando que a API falhou
+    } finally {
       setIsSearching(false);
-    }, 50);
-  }, [query, words, hashFn, totalBuckets, bucketsPerPage, onSearchResult]);
+    }
+  }, [query, customSearchApi, onSearchResult]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") handleSearch();
@@ -50,12 +71,12 @@ export function WordSearch({ words, hashFn, totalBuckets, bucketsPerPage, onSear
         </div>
         <Button
           onClick={handleSearch}
-          disabled={!query.trim() || isSearching || words.length === 0}
+          disabled={!query.trim() || isSearching}
           className="gap-2 hidden"
           size="sm"
         >
           <Search className="h-4 w-4" />
-          Buscar
+          {isSearching ? "Buscando..." : "Buscar"}
         </Button>
       </div>
 
@@ -78,45 +99,65 @@ export function WordSearch({ words, hashFn, totalBuckets, bucketsPerPage, onSear
 
           {result.found && (
             <p className="text-xs text-muted-foreground font-mono">
-              Bucket: [{result.bucketIndex}] • Página: {(result.pageIndex ?? 0) + 1}
+              Bucket: <b style={{ color: HASH_COLORS[2] }}>{result.bucketIndex}</b> • Página: <b style={{ color: HASH_COLORS[1] }}  >{result.pageIndex}</b>
             </p>
           )}
 
           {/* Timing metrics */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-lg border p-3 space-y-1">
+            <div className="rounded-lg border p-3 space-y-1 bg-blue-50/50 border-blue-100">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-display">
                 Índice Hash (s)
               </div>
-              <p className="font-bold font-mono text-foreground">
-                {result.hashIndexTime.toFixed(6)}
+              <p className="font-bold font-mono text-blue-600">
+                {Number(result.hashIndexTime || 0).toFixed(6)}
               </p>
             </div>
 
-            <div className="rounded-lg border p-3 space-y-1">
+            <div className="rounded-lg border p-3 space-y-1 bg-orange-50/50 border-orange-100">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-display">
                 Table Scan (s)
               </div>
-              <p className="font-bold font-mono text-foreground">
-                {result.tableScanTime.toFixed(6)}
+              <p className="font-bold font-mono text-orange-600">
+                {Number(result.tableScanTime || 0).toFixed(6)}
               </p>
             </div>
 
-            <div className="rounded-lg border p-3 space-y-1">
+            {/* NOVO: Acessos Hash */}
+            <div className="rounded-lg border p-3 space-y-1 bg-pink-50/50 border-pink-100">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-display">
+                Custo Hash
+              </div>
+              <p className="font-bold font-mono text-pink-500">
+                {result.hashAccesses} {result.hashAccesses === 1 ? 'pg' : 'pgs'}
+              </p>
+            </div>
+
+            {/* NOVO: Acessos Table Scan */}
+            <div className="rounded-lg border p-3 space-y-1 bg-rose-50/50 border-rose-100">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-display">
+                Custo Scan
+              </div>
+              <p className="font-bold font-mono text-rose-600">
+                {result.scanAccesses} {result.scanAccesses === 1 ? 'pg' : 'pgs'}
+              </p>
+            </div>
+
+            <div className="rounded-lg border p-3 space-y-1 bg-emerald-50/50 border-emerald-100">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-display">
                 Redução Tmp
               </div>
-              <p className="font-bold font-mono text-foreground">
-                {result.timeReduction.toFixed(2)}%
+              <p className="font-bold font-mono text-emerald-600">
+                {Number(result.timeReduction || 0).toFixed(2)}%
               </p>
             </div>
 
-            <div className="rounded-lg border p-3 space-y-1">
+            <div className="rounded-lg border p-3 space-y-1 bg-indigo-50/50 border-indigo-100">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-display">
                 Rapidez
               </div>
-              <p className="font-bold font-mono text-foreground">
-                {result.speedup.toFixed(2)}x
+              <p className="font-bold font-mono text-indigo-600">
+                {Number(result.speedup || 0).toFixed(2)}x
               </p>
             </div>
           </div>

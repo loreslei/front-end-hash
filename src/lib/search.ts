@@ -1,14 +1,19 @@
-import { hashWord, type HashFunction } from "./hash";
+// src/lib/search.ts
+
+// A URL do seu backend local
+const API_URL = "http://127.0.0.1:8000";
 
 export interface SearchResult {
   found: boolean;
   word: string;
-  hashIndexTime: number;    // seconds, 6 decimal places
-  tableScanTime: number;    // seconds, 6 decimal places
-  timeReduction: number;    // percentage, 2 decimal places
-  speedup: number;          // float, 2 decimal places
+  hashIndexTime: number;
+  tableScanTime: number;
+  timeReduction: number;
+  speedup: number;
   bucketIndex?: number;
   pageIndex?: number;
+  hashAccesses: number; 
+  scanAccesses: number; 
 }
 
 export interface PageData {
@@ -27,105 +32,123 @@ export interface BucketData {
 }
 
 /**
- * Builds a hash table structure grouped by pages.
- * Each page contains `bucketsPerPage` buckets.
+ * 1. Inicializa o banco no backend
  */
-export function buildPagedHashTable(
-  words: string[],
-  hashFn: HashFunction,
-  totalBuckets: number,
-  bucketsPerPage: number
-): PageData[] {
-  const table: string[][] = Array.from({ length: totalBuckets }, () => []);
+export async function initializeDatabase(tuplesPerPage: number, bucketCapacity: number) {
+  const response = await fetch(`${API_URL}/inicializar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      tuples_per_page: tuplesPerPage,
+      bucket_capacity: bucketCapacity
+    })
+  });
   
-  for (const w of words) {
-    const idx = hashWord(w, hashFn, totalBuckets);
-    table[idx].push(w);
-  }
+  if (!response.ok) throw new Error("Erro ao inicializar o banco de dados");
+  return await response.json();
+}
 
-  const totalPages = Math.ceil(totalBuckets / bucketsPerPage);
+/**
+ * 2. Busca a estrutura do backend e adapta para o formato que a UI do Lovable espera
+ */
+export async function fetchHashTableStructure(bucketsPerPage: number): Promise<PageData[]> {
+  const response = await fetch(`${API_URL}/estrutura?detalhado=true`);
+  const data = await response.json();
+  
+  // Pegamos a lista de índices vinda do backend
+  const estruturaIndice = data.estrutura_indice || [];
+  
+  // O frontend do Lovable agrupava buckets por "páginas de buckets" visualmente.
+  // Vamos remontar essa estrutura para a interface não quebrar.
+  const todosOsBuckets: BucketData[] = [];
+  
+  estruturaIndice.forEach((idx: any) => {
+    idx.detalhes_buckets.forEach((b: any) => {
+      // Pega as palavras de dentro dos registros do backend
+      const words = b.registros ? b.registros.map((r: any) => r.chave) : [];
+      todosOsBuckets.push({
+        index: b.id_bucket,
+        words: words,
+        collisionCount: Math.max(0, words.length - 1)
+      });
+    });
+  });
+
+  // Agrupando para o formato PageData da UI
   const pages: PageData[] = [];
-
+  const totalPages = Math.ceil(todosOsBuckets.length / bucketsPerPage);
+  
   for (let p = 0; p < totalPages; p++) {
     const start = p * bucketsPerPage;
-    const end = Math.min(start + bucketsPerPage, totalBuckets);
-    const buckets: BucketData[] = [];
+    const end = start + bucketsPerPage;
+    const bucketsSlice = todosOsBuckets.slice(start, end);
+    
     let totalWords = 0;
     let totalCollisions = 0;
     let maxBucketSize = 0;
     let overflows = 0;
 
-    for (let i = start; i < end; i++) {
-      const words = table[i];
-      const collisionCount = Math.max(0, words.length - 1);
-      buckets.push({ index: i, words, collisionCount });
-      totalWords += words.length;
-      totalCollisions += collisionCount;
-      maxBucketSize = Math.max(maxBucketSize, words.length);
-      if (words.length > 1) overflows++;
-    }
+    bucketsSlice.forEach(b => {
+      totalWords += b.words.length;
+      totalCollisions += b.collisionCount;
+      maxBucketSize = Math.max(maxBucketSize, b.words.length);
+      if (b.words.length > 1) overflows++; // Lógica simples para UI
+    });
 
-    pages.push({ pageIndex: p, buckets, totalWords, totalCollisions, maxBucketSize, overflows });
+    pages.push({
+      pageIndex: p,
+      buckets: bucketsSlice,
+      totalWords,
+      totalCollisions,
+      maxBucketSize,
+      overflows
+    });
   }
 
   return pages;
 }
 
 /**
- * Performs search using hash index (O(1) average) and table scan (O(n)),
- * measuring real execution time for both.
+ * 3. Faz a busca da palavra no backend
  */
-export function searchWord(
-  word: string,
-  allWords: string[],
-  hashFn: HashFunction,
-  totalBuckets: number,
-  bucketsPerPage: number
-): SearchResult {
-  const normalizedWord = word.trim().toLowerCase();
+export async function searchWordApi(word: string): Promise<SearchResult> {
+  try {
+    const response = await fetch(`${API_URL}/buscar/${word}`);
+    if (!response.ok) throw new Error("Erro na requisição da API");
+    
+    const data = await response.json();
+    
+    const resHash = data.resultados?.indice_hash || {};
+    const resScan = data.resultados?.table_scan || {};
+    const tempos = data.comparacao_tempo || {};
+    
+    return {
+      found: resHash.encontrado === true, 
+      word: data.palavra_buscada || word,
+      
+      hashIndexTime: tempos.tempo_hash_segundos ?? 0,
+      tableScanTime: tempos.tempo_scan_segundos ?? 0,
+      timeReduction: tempos.reducao_tempo_pct ?? 0,
+      speedup: tempos.ganho_velocidade_x ?? 0,
+      
+      bucketIndex: resHash.bucket,
+      pageIndex: resHash.pagina,
 
-  // Hash index search
-  const hashStart = performance.now();
-  const bucketIdx = hashWord(normalizedWord, hashFn, totalBuckets);
-  const table: string[][] = Array.from({ length: totalBuckets }, () => []);
-  for (const w of allWords) {
-    table[hashWord(w, hashFn, totalBuckets)].push(w);
+      // NOVO: Buscando o custo exato que o Python calculou
+      hashAccesses: resHash.acessos_feitos ?? 0,
+      scanAccesses: resScan.custo_paginas_lidas ?? 0
+    };
+  } catch (error) {
+    console.error("Erro no fetch da busca:", error);
+    return {
+      found: false,
+      word: word,
+      hashIndexTime: 0,
+      tableScanTime: 0,
+      timeReduction: 0,
+      speedup: 0,
+      hashAccesses: 0,
+      scanAccesses: 0
+    };
   }
-  const foundInHash = table[bucketIdx].includes(normalizedWord);
-  const hashEnd = performance.now();
-  const hashIndexTime = (hashEnd - hashStart) / 1000; // convert ms to seconds
-
-  // Table scan search
-  const scanStart = performance.now();
-  let foundInScan = false;
-  for (let i = 0; i < allWords.length; i++) {
-    if (allWords[i] === normalizedWord) {
-      foundInScan = true;
-      break;
-    }
-  }
-  const scanEnd = performance.now();
-  const tableScanTime = (scanEnd - scanStart) / 1000;
-
-  // Avoid division by zero
-  const timeReduction = tableScanTime > 0
-    ? ((tableScanTime - hashIndexTime) / tableScanTime) * 100
-    : 0;
-
-  const speedup = hashIndexTime > 0
-    ? tableScanTime / hashIndexTime
-    : 0;
-
-  const pageIndex = Math.floor(bucketIdx / bucketsPerPage);
-
-  return {
-    found: foundInHash || foundInScan,
-    word: normalizedWord,
-    hashIndexTime,
-    tableScanTime,
-    timeReduction,
-    speedup,
-    bucketIndex: bucketIdx,
-    pageIndex,
-  };
 }

@@ -30,9 +30,9 @@ export function HashConfig({
         <Input
           type="number"
           min={1}
-          max={100000}
+          max={466550}
           value={totalBuckets}
-          onChange={(e) => onTotalBucketsChange(Math.max(1, Math.min(100000, parseInt(e.target.value) || 1)))}
+          onChange={(e) => onTotalBucketsChange(Math.max(1, Math.min(466550, parseInt(e.target.value) || 1)))}
           className="font-mono text-sm"
         />
       </div>
@@ -41,9 +41,9 @@ export function HashConfig({
         <Input
           type="number"
           min={1}
-          max={5000}
+          max={466550}
           value={bucketsPerPage}
-          onChange={(e) => onBucketsPerPageChange(Math.max(1, Math.min(5000, parseInt(e.target.value) || 1)))}
+          onChange={(e) => onBucketsPerPageChange(Math.max(1, Math.min(466550, parseInt(e.target.value) || 1)))}
           className="font-mono text-sm"
         />
       </div>
