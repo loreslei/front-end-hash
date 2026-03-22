@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .cards-stats {
+    @apply rounded-lg border py-3 flex flex-col justify-center text-center;
+  }
+  .text-stats {
+    @apply text-[9.5px] text-muted-foreground uppercase tracking-wider text-center;
+  }
+  
+}
+

@@ -100,7 +100,7 @@ const Index = () => {
                 onInitialize={handleInitialize}
                 isInitialized={isInitialized}
               />
-              {isLoading && <p className="text-xs text-indigo-600">Conectando ao banco...</p>}
+              {isLoading && <p className="text-xs text-emerald-600">Conectando ao banco...</p>}
             </div>
 
             {isInitialized && (

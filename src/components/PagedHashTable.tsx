@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, memo } from "react";
 import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PageData } from "@/lib/search";
+import "./Paged.css"
 
 const HASH_COLORS = [
   "hsl(var(--hash-0))",
@@ -68,16 +69,19 @@ export function PagedHashTable({ pages, highlightIndex, onHighlightIndex, highli
   const totalPages = pages.length;
   const safePage = Math.min(currentPageIdx, totalPages - 1);
 
-  // Global stats
+  // Global stats - Agora calcula também o Total de Buckets
   const globalStats = useMemo(() => {
-    let totalWords = 0, totalCollisions = 0, maxBucket = 0, overflows = 0;
+    let totalWords = 0, totalCollisions = 0, maxBucket = 0, overflows = 0, totalBuckets = 0;
+    
     for (const p of pages) {
       totalWords += p.totalWords;
       totalCollisions += p.totalCollisions;
       maxBucket = Math.max(maxBucket, p.maxBucketSize);
       overflows += p.overflows;
+      totalBuckets += p.buckets.length; // Contando a quantidade real de buckets
     }
-    return { totalWords, totalCollisions, maxBucket, overflows };
+    
+    return { totalWords, totalCollisions, maxBucket, overflows, totalBuckets };
   }, [pages]);
 
   const togglePage = useCallback((pageIdx: number) => {
@@ -89,7 +93,6 @@ export function PagedHashTable({ pages, highlightIndex, onHighlightIndex, highli
     });
   }, []);
 
-  // Display pages with pagination (show 5 pages at a time)
   const PAGES_PER_VIEW = 5;
   const startPage = Math.floor(safePage / PAGES_PER_VIEW) * PAGES_PER_VIEW;
   const visiblePages = pages.slice(startPage, startPage + PAGES_PER_VIEW);
@@ -100,27 +103,40 @@ export function PagedHashTable({ pages, highlightIndex, onHighlightIndex, highli
 
   return (
     <div className="space-y-4">
-      {/* Global stats */}
-      <div className="grid grid-cols-4 gap-3">
-        <div className="rounded-lg border p-3 text-center bg-emerald-50/50 border-emerald-100">
-          <p className="text-2xl font-bold font-mono text-primary">{globalStats.totalWords}</p>
-          <p className="text-[10px] text-muted-foreground font-display uppercase tracking-wider">Inserções</p>
+      {/* Global stats (5 colunas) */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="cards-stats bg-emerald-50/50 border-emerald-100">
+          <p className="text-xl font-bold font-mono text-primary">{globalStats.totalWords}</p>
+          <p className="text-stats">Inserções</p>
         </div>
-        <div className="rounded-lg border p-3 text-center bg-pink-50/50 border-pink-100">
-          <p className="text-2xl font-bold font-mono" style={{ color: HASH_COLORS[4] }}>{globalStats.totalCollisions}</p>
-          <p className="text-[10px] text-muted-foreground font-display uppercase tracking-wider">Colisões</p>
+        
+        <div className="cards-stats bg-pink-50/50 border-pink-100">
+          <p className="text-xl font-bold font-mono" style={{ color: HASH_COLORS[4] }}>{globalStats.totalCollisions}</p>
+          <p className="text-stats">Colisões</p>
         </div>
-        <div className="rounded-lg border p-3 text-center bg-violet-50/50 border-violet-100">
-          <p className="text-2xl font-bold font-mono" style={{ color: HASH_COLORS[2] }}>
-            {globalStats.totalWords > 0 ? ((globalStats.totalCollisions / globalStats.totalWords) * 100).toFixed(1) : 0}%
+        
+        <div className="cards-stats bg-violet-50/50 border-violet-100">
+          <p className="text-xl font-bold font-mono" style={{ color: HASH_COLORS[2] }}>
+            {globalStats.totalWords > 0 ? ((globalStats.totalCollisions / globalStats.totalWords) * 100).toFixed(2) : 0}%
           </p>
-          <p className="text-[10px] text-muted-foreground font-display uppercase tracking-wider">Colisões %</p>
+          <p className="text-stats">Colisão %</p>
         </div>
-        <div className="rounded-lg border p-3 text-center bg-sky-50/50 border-sky-100">
-          <p className="text-2xl font-bold font-mono" style={{ color: HASH_COLORS[1] }}>{globalStats.overflows}</p>
-          <p className="text-[10px] text-muted-foreground font-display uppercase tracking-wider">Overflows</p>
+        
+        {/* Card de Quantidade de Overflows (Mantido) */}
+        <div className="cards-stats bg-sky-50/50 border-sky-100">
+          <p className="text-xl font-bold font-mono" style={{ color: HASH_COLORS[1] }}>{globalStats.overflows}</p>
+          <p className="text-stats">Overflows</p>
+        </div>
+
+        {/* Card de Taxa de Overflow (Corrigido para usar a quantidade de Buckets) */}
+        <div className="cards-stats bg-orange-50/50 border-orange-100">
+          <p className="text-xl font-bold font-mono" style={{ color: HASH_COLORS[3] }}>
+            {globalStats.totalBuckets > 0 ? ((globalStats.overflows / globalStats.totalBuckets) * 100).toFixed(2) : 0}%
+          </p>
+          <p className="text-stats">Overflow %</p>
         </div>
       </div>
+      
 
       {/* Pages */}
       <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
