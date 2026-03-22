@@ -1,7 +1,7 @@
 // src/lib/search.ts
 
 // A URL do seu backend local
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = "https://indice-hash-dinamico.onrender.com";
 
 export interface SearchResult {
   found: boolean;
